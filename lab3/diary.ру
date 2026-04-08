@@ -1,0 +1,198 @@
+# Лабораторная работа №3
+# Дневник заметок
+# Работа с датой и временем, хранение в JSON
+
+import json
+from datetime import datetime
+from pathlib import Path
+import sys
+
+# Определяем путь к файлу данных
+# Используем pathlib для кроссплатформенности
+DATA_FILE = Path(__file__).parent / "notes.json"
+
+# Функция для загрузки заметок из файла
+def load_notes():
+    """Загружает заметки из JSON-файла"""
+    if not DATA_FILE.exists():
+        return []  # Если файла нет, возвращаем пустой список
+    
+    try:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            notes = json.load(f)
+        return notes
+    except (json.JSONDecodeError, FileNotFoundError):
+        # Если файл повреждён или не найден, возвращаем пустой список
+        return []
+
+# Функция для сохранения заметок в файл
+def save_notes(notes):
+    """Сохраняет заметки в JSON-файл"""
+    try:
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(notes, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        print(f"Ошибка при сохранении: {e}")
+        return False
+
+# Функция для создания новой заметки
+def create_note():
+    """Создаёт новую заметку"""
+    print("\n--- Создание новой заметки ---")
+    
+    # Ввод заголовка
+    title = input("Введите заголовок заметки: ").strip()
+    if not title:
+        print("Заголовок не может быть пустым!")
+        return
+    
+    # Ввод текста
+    content = input("Введите текст заметки: ").strip()
+    if not content:
+        print("Текст заметки не может быть пустым!")
+        return
+    
+    # Получаем текущую дату и время
+    now = datetime.now()
+    current_date = now.strftime("%d.%m.%Y")  # Дата в формате ДД.ММ.ГГГГ
+    current_time = now.strftime("%H:%M:%S")   # Время в формате ЧЧ:ММ:СС
+    full_datetime = now.strftime("%d.%m.%Y %H:%M:%S")  # Полная дата и время
+    
+    # Создаём заметку
+    note = {
+        "id": len(load_notes()) + 1,  # Простой ID для нумерации
+        "title": title,
+        "content": content,
+        "date": current_date,
+        "time": current_time,
+        "datetime": full_datetime,
+        "timestamp": now.timestamp()  # Unix timestamp для сортировки
+    }
+    
+    # Загружаем существующие заметки
+    notes = load_notes()
+    notes.append(note)
+    
+    # Сохраняем
+    if save_notes(notes):
+        print(f"\n✓ Заметка успешно создана!")
+        print(f"  Дата: {full_datetime}")
+        print(f"  Заголовок: {title}")
+    else:
+        print("Ошибка при сохранении заметки!")
+
+# Функция для показа всех заметок
+def show_all_notes():
+    """Показывает все заметки"""
+    print("\n--- Все заметки ---")
+    
+    notes = load_notes()
+    
+    if not notes:
+        print("Заметок пока нет. Создайте первую заметку!")
+        return
+    
+    # Сортируем по дате (новые сверху)
+    notes_sorted = sorted(notes, key=lambda x: x.get("timestamp", 0), reverse=True)
+    
+    print(f"\nВсего заметок: {len(notes_sorted)}")
+    print("=" * 70)
+    
+    for i, note in enumerate(notes_sorted, 1):
+        print(f"\n📝 Заметка #{note.get('id', i)}")
+        print(f"   📅 Дата: {note['datetime']}")
+        print(f"   📌 Заголовок: {note['title']}")
+        print(f"   📄 Текст: {note['content']}")
+        print("-" * 70)
+
+# Функция для поиска заметок по дате
+def find_notes_by_date():
+    """Ищет заметки по дате"""
+    print("\n--- Поиск заметок по дате ---")
+    
+    notes = load_notes()
+    
+    if not notes:
+        print("Заметок пока нет. Создайте первую заметку!")
+        return
+    
+    # Запрашиваем дату
+    while True:
+        date = input("Введите дату в формате ДД.ММ.ГГГГ: ").strip()
+        
+        # Проверяем формат даты
+        try:
+            datetime.strptime(date, "%d.%m.%Y")
+            break
+        except ValueError:
+            print("Ошибка: неверный формат даты. Используйте ДД.ММ.ГГГГ")
+    
+    # Ищем заметки с этой датой
+    found_notes = [note for note in notes if note.get("date") == date]
+    
+    if not found_notes:
+        print(f"\nЗаметок на дату {date} не найдено.")
+        return
+    
+    # Сортируем по времени
+    found_notes.sort(key=lambda x: x.get("timestamp", 0))
+    
+    print(f"\n Найдено заметок: {len(found_notes)} на дату {date}")
+    print("=" * 70)
+    
+    for note in found_notes:
+        print(f"\n Заголовок: {note['title']}")
+        print(f"   ⏰ Время: {note.get('time', 'не указано')}")
+        print(f"   📄 Текст: {note['content']}")
+        print("-" * 50)
+
+# Функция для показа меню
+def show_menu():
+    """Показывает главное меню"""
+    print("\n" + "=" * 50)
+    print("📔 ДНЕВНИК ЗАМЕТОК")
+    print("=" * 50)
+    print("\nВыберите действие:")
+    print("1. 📝 Создать новую заметку")
+    print("2. 📋 Показать все заметки")
+    print("3. 🔍 Найти заметку по дате")
+    print("4. 🚪 Выход")
+    print("-" * 50)
+
+# Главная функция
+def main():
+    """Главная функция программы"""
+    
+    # Создаём папку для данных, если нужно (опционально)
+    # В данном случае файл создаётся в той же папке
+    
+    print("\n📔 Дневник заметок")
+    print("=" * 50)
+    print("Программа для ведения личных заметок")
+    print("Все заметки сохраняются в JSON-файл")
+    
+    while True:
+        show_menu()
+        
+        choice = input("Ваш выбор: ").strip()
+        
+        if choice == "1":
+            create_note()
+        elif choice == "2":
+            show_all_notes()
+        elif choice == "3":
+            find_notes_by_date()
+        elif choice == "4":
+            print("\n👋 До свидания!")
+            print("Ваши заметки сохранены в файле notes.json")
+            break
+        else:
+            print("Ошибка: выберите 1, 2, 3 или 4")
+        
+        # Пауза перед продолжением
+        input("\nНажмите Enter для продолжения...")
+
+# Запуск программы
+if __name__ == "__main__":
+    main()
