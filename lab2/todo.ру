@@ -1,0 +1,267 @@
+"""
+Лабораторная работа №2
+Тема: Условные операторы, циклы и работа с файловой системой
+Программа: Журнал наблюдений
+"""
+
+from pathlib import Path
+import sys
+import os
+
+def get_data_file_path():
+    """
+    Возвращает путь к файлу данных.
+    Файл хранится в подпапке 'data' рядом с программой.
+    Папка создаётся автоматически, если её нет.
+    """
+    # Получаем директорию, где находится скрипт
+    script_dir = Path(__file__).parent
+    # Формируем путь к папке data
+    data_dir = script_dir / "data"
+    # Создаём папку, если её нет (exist_ok=True не вызывает ошибку, если папка уже существует)
+    data_dir.mkdir(exist_ok=True)
+    # Возвращаем путь к файлу журнала
+    return data_dir / "journal.txt"
+
+def validate_date(date_str):
+    """
+    Проверяет формат даты ГГГГ-ММ-ДД.
+    Возвращает True, если формат корректен, иначе False.
+    """
+    # Разделяем строку по дефису
+    parts = date_str.split("-")
+    
+    # Проверяем, что получилось ровно 3 части
+    if len(parts) != 3:
+        return False
+    
+    year, month, day = parts
+    
+    # Проверяем, что все части состоят только из цифр
+    if not (year.isdigit() and month.isdigit() and day.isdigit()):
+        return False
+    
+    # Преобразуем в числа для проверки диапазонов
+    year_num = int(year)
+    month_num = int(month)
+    day_num = int(day)
+    
+    # Проверяем диапазоны
+    if year_num < 1900 or year_num > 2100:
+        return False
+    
+    if month_num < 1 or month_num > 12:
+        return False
+    
+    if day_num < 1 or day_num > 31:
+        return False
+    
+    # Простая проверка для месяцев с 30 днями
+    if month_num in [4, 6, 9, 11] and day_num > 30:
+        return False
+    
+    # Проверка для февраля (упрощённо, без учёта високосных годов)
+    if month_num == 2 and day_num > 29:
+        return False
+    
+    return True
+
+def validate_rating(rating_str):
+    """
+    Проверяет, что оценка — целое число от 1 до 10.
+    Возвращает int, если оценка корректна, иначе None.
+    """
+    try:
+        rating = int(rating_str)
+        if 1 <= rating <= 10:
+            return rating
+        else:
+            print("Ошибка: оценка должна быть от 1 до 10")
+            return None
+    except ValueError:
+        print("Ошибка: введите целое число")
+        return None
+
+def add_entry(file_path):
+    """
+    Добавляет новую запись в журнал.
+    """
+    print("\n--- Добавление новой записи ---")
+    
+    # Ввод даты с проверкой
+    while True:
+        date = input("Введите дату (ГГГГ-ММ-ДД): ").strip()
+        if validate_date(date):
+            break
+        else:
+            print("Ошибка: дата должна быть в формате ГГГГ-ММ-ДД (например, 2024-09-15)")
+    
+    # Ввод текста наблюдения
+    text = input("Введите текст наблюдения: ").strip()
+    while not text:
+        text = input("Текст не может быть пустым. Введите текст: ").strip()
+    
+    # Ввод оценки с проверкой
+    while True:
+        rating_str = input("Введите оценку (1-10): ").strip()
+        rating = validate_rating(rating_str)
+        if rating is not None:
+            break
+    
+    # Формируем строку для сохранения
+    # Используем | в качестве разделителя
+    entry = f"{date} | {rating} | {text}\n"
+    
+    # Открываем файл в режиме добавления (append)
+    # encoding='utf-8' для корректной работы с русским текстом
+    try:
+        with open(file_path, 'a', encoding='utf-8') as f:
+            f.write(entry)
+        print("Запись успешно добавлена!")
+    except Exception as e:
+        print(f"Ошибка при сохранении: {e}")
+
+def show_entries(file_path):
+    """
+    Показывает все записи из журнала в виде таблицы.
+    Выводит статистику.
+    """
+    print("\n--- Все записи ---")
+    
+    # Проверяем, существует ли файл
+    if not file_path.exists():
+        print("Журнал пуст (файл ещё не создан).")
+        return
+    
+    # Читаем все записи из файла
+    entries = []
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            entries = f.readlines()
+    except Exception as e:
+        print(f"Ошибка при чтении файла: {e}")
+        return
+# Если файл пуст
+    if not entries:
+        print("Журнал пуст.")
+        return
+    
+    # Определяем ширину колонок
+    # Сначала находим максимальную длину в каждой колонке
+    max_date_len = 10  # Дата всегда 10 символов
+    max_rating_len = 6  # Оценка: "Оценка" + 2 запаса
+    max_text_len = 20   # Минимальная ширина для текста
+    
+    # Парсим записи и находим максимальные длины
+    parsed_entries = []
+    for entry in entries:
+        entry = entry.strip()
+        if not entry:
+            continue
+        
+        # Разделяем строку по разделителю " | "
+        parts = entry.split(" | ")
+        if len(parts) == 3:
+            date, rating, text = parts
+            parsed_entries.append((date, rating, text))
+            max_date_len = max(max_date_len, len(date))
+            max_rating_len = max(max_rating_len, len(rating))
+            max_text_len = max(max_text_len, len(text))
+    
+    if not parsed_entries:
+        print("Нет корректных записей для отображения.")
+        return
+    
+    # Добавляем отступы для красоты
+    max_date_len += 2
+    max_rating_len += 2
+    max_text_len += 2
+    
+    # Создаём разделительные линии
+    separator = "+" + "-" * max_date_len + "+" + "-" * max_rating_len + "+" + "-" * max_text_len + "+"
+    
+    # Выводим заголовок таблицы
+    print(separator)
+    print(f"| {'Дата':<{max_date_len-1}}| {'Оценка':<{max_rating_len-1}}| {'Текст':<{max_text_len-1}}|")
+    print(separator)
+    
+    # Выводим каждую запись
+    for date, rating, text in parsed_entries:
+        print(f"| {date:<{max_date_len-1}}| {rating:<{max_rating_len-1}}| {text:<{max_text_len-1}}|")
+    
+    print(separator)
+    
+    # Статистика
+    total_entries = len(parsed_entries)
+    total_rating = sum(int(rating) for _, rating, _ in parsed_entries)
+    average_rating = total_rating / total_entries if total_entries > 0 else 0
+    
+    print(f"\nСтатистика:")
+    print(f"Всего записей: {total_entries}")
+    print(f"Средняя оценка: {average_rating:.2f}")
+
+def clear_journal(file_path):
+    """
+    Очищает журнал (удаляет содержимое файла).
+    """
+    print("\n--- Очистка журнала ---")
+    
+    # Запрашиваем подтверждение
+    confirm = input("Вы уверены, что хотите очистить весь журнал? (да/нет): ").strip().lower()
+    
+    if confirm in ['да', 'yes', 'y', 'д']:
+        try:
+            # Открываем файл в режиме записи (w) - это очистит файл
+            with open(file_path, 'w', encoding='utf-8') as f:
+                pass  # Просто открываем и закрываем для очистки
+            print("Журнал успешно очищен!")
+        except Exception as e:
+            print(f"Ошибка при очистке: {e}")
+    else:
+        print("Очистка отменена.")
+
+def show_menu():
+    """
+    Отображает главное меню.
+    """
+    print("\n" + "=" * 40)
+    print("ЖУРНАЛ НАБЛЮДЕНИЙ")
+    print("=" * 40)
+    print("Выберите действие:")
+    print("1. Добавить запись")
+    print("2. Показать все записи")
+    print("3. Очистить журнал")
+    print("4. Выход")
+    print("-" * 40)
+
+def main():
+    """
+    Главная функция программы.
+    """
+    # Получаем путь к файлу данных
+    file_path = get_data_file_path()
+    
+    # Бесконечный цикл для отображения меню
+    while True:
+        show_menu()
+        choice = input("Ваш выбор: ").strip()
+        
+        if choice == '1':
+            add_entry(file_path)
+        
+        elif choice == '2':
+            show_entries(file_path)
+        
+        elif choice == '3':
+            clear_journal(file_path)
+        
+        elif choice == '4':
+            print("\nДо свидания!")
+            sys.exit(0)
+        
+        else:
+            print("Ошибка: неверный выбор. Пожалуйста, выберите 1, 2, 3 или 4.")
+
+# Точка входа в программу
+if __name__ == "__main__":
+    main()
